@@ -25,32 +25,20 @@ import java.util.List;
  * Demo for target detection (bright-colored ball) using opencv.
  *
  * @author fiorfe01 - Fabio Fiori
- * @author Isaac Smith
+ * @author  - Isaac Smith
  */
 public class TargetDetectionActivity extends Activity implements CameraBridgeViewBase.CvCameraViewListener2 {
 
-    List<MatOfPoint> contours; // target contours
-
     private Mat rgbaMat; // original image matrix
+    private Mat pyrDownMat; // downsized image matrix
     private Mat hsvMat; // hsv image matrix
     private Mat binaryMat; // binary image matrix
     private Mat denoisedMat; // denoised image matrix
     private Mat hierarchyMat; // hierarchy image matrix
-    private Mat dummyMat; // for noise cancellation
-
-    private MatOfPoint largestContour; // largest contour
-
-    private MatOfPoint2f convLargestContour; // converted largest contour
 
     // lower and upper threshold for hsv target color
     private Scalar lowerThreshold, upperThreshold;
     private Scalar CONTOUR_COLOR; // contour color
-
-    private Point center; // target center
-    private float[] radius; // target radius
-
-    private double contourArea; // current contour area
-    private double largestArea; // largest contour area
 
     private Robot rob; // robot unit object
 
@@ -121,24 +109,19 @@ public class TargetDetectionActivity extends Activity implements CameraBridgeVie
 
         // instantiate matrices
         rgbaMat = new Mat(height, width, CvType.CV_8UC4);
+        pyrDownMat = new Mat(height, width, CvType.CV_8UC4);
         hsvMat = new Mat(height, width, CvType.CV_8UC4);
         binaryMat = new Mat(height, width, CvType.CV_8UC4);
         denoisedMat = new Mat(height, width, CvType.CV_8UC4);
         hierarchyMat = new Mat(height, width, CvType.CV_8UC4);
-        dummyMat = new Mat();
-
-        convLargestContour = new MatOfPoint2f();
-
-        //lowerThreshold = new Scalar(0.11 * 256, 0.60 * 256, 0.20 * 256); // yellow tennis color – lower hsv values
-        //upperThreshold = new Scalar(0.14 * 256, 256, 256); // yellow tennis color – upper hsv values
 
         lowerThreshold = new Scalar(-40, 110, 170); // lower target hsv values (orange)
         upperThreshold = new Scalar(24, 261, 256); // upper target hsv values (orange)
 
-        CONTOUR_COLOR = new Scalar(0, 255, 0, 255);
+        //lowerThreshold = new Scalar(0.11 * 256, 0.60 * 256, 0.20 * 256); // yellow tennis color – lower hsv values
+        //upperThreshold = new Scalar(0.14 * 256, 256, 256); // yellow tennis color – upper hsv values
 
-        center = new Point();
-        radius = new float[1];
+        CONTOUR_COLOR = new Scalar(0, 255, 0, 255);
 
         rob = new Robot("192.168.1.101");
 
@@ -156,38 +139,43 @@ public class TargetDetectionActivity extends Activity implements CameraBridgeVie
     @Override
     public Mat onCameraFrame(CameraBridgeViewBase.CvCameraViewFrame inputFrame) {
 
-        // image capture
+        // original image capture
         rgbaMat = inputFrame.rgba();
 
-        // convert image to hsv
-        Imgproc.cvtColor(rgbaMat, hsvMat, Imgproc.COLOR_RGB2HSV, 3);
+        // downsize original image (divide length and height by 4) for faster image processing
+        Imgproc.pyrDown(rgbaMat, pyrDownMat);
+        Imgproc.pyrDown(pyrDownMat, pyrDownMat);
+
+        // convert downgraded image to hsv
+        Imgproc.cvtColor(pyrDownMat, hsvMat, Imgproc.COLOR_RGB2HSV_FULL);
 
         // convert hsv to binary image
         Core.inRange(hsvMat, lowerThreshold, upperThreshold, binaryMat);
 
         // dilate and erode binary image
-        Imgproc.dilate(binaryMat, denoisedMat, dummyMat);
-        Imgproc.erode(denoisedMat, denoisedMat, dummyMat);
+        Imgproc.dilate(binaryMat, denoisedMat, new Mat());
+        Imgproc.erode(denoisedMat, denoisedMat, new Mat());
 
-        contours = new ArrayList<MatOfPoint>();
+        List<MatOfPoint> contours = new ArrayList<MatOfPoint>();
 
         // contours determination
         Imgproc.findContours(denoisedMat, contours, hierarchyMat, Imgproc.RETR_LIST, Imgproc.CHAIN_APPROX_SIMPLE);
 
-        largestArea = 0;
+        double largestArea = 0.0;
 
-        largestContour = new MatOfPoint();
+        MatOfPoint largestContour = new MatOfPoint();
 
         // iterate through each contour
         for (MatOfPoint currContour : contours) {
 
             // find the area of contour
-            contourArea = Imgproc.contourArea(currContour);
+            double contourArea = Imgproc.contourArea(currContour);
 
             if (contourArea > largestArea) {
 
                 largestArea = contourArea;
-                // store the index of largest contour
+
+                // store the largest contour
                 largestContour = currContour;
             }
         }
@@ -195,9 +183,18 @@ public class TargetDetectionActivity extends Activity implements CameraBridgeVie
         // if target is found
         if (largestArea != 0) {
 
+            // resize largest contour to fit the original image size
+            Core.multiply(largestContour, new Scalar(4, 4), largestContour);
+
+            MatOfPoint2f convLargestContour = new MatOfPoint2f();
+
             // get largest contour
             largestContour.convertTo(convLargestContour, CvType.CV_32FC2);
 
+            Point center = new Point();
+            float[] radius = new float[1];
+
+            // get target center and radius
             Imgproc.minEnclosingCircle(convLargestContour, center, radius);
 
             // draw perimeter
