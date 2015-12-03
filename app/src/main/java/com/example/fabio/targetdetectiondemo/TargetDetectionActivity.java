@@ -51,13 +51,11 @@ public class TargetDetectionActivity extends Activity implements CameraBridgeVie
     private int mCameraViewWidth;
     private int mCameraViewHeight;
 
-    private boolean findHSV;
+    private boolean follow; // follow target variable
 
-    // target hsv rectangle
-    private Rect targetHSVRect;
+    private Rect targetHSVRect; // target hsv rectangle
 
-    // Robot obj for communication
-    private Robot rob;
+    private Robot rob; // Robot obj for communication
 
     private CameraBridgeViewBase mOpenCvCameraView;
 
@@ -94,11 +92,9 @@ public class TargetDetectionActivity extends Activity implements CameraBridgeVie
         toggle.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
             public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
 
-                findHSV = isChecked;
+                follow = isChecked;
             }
         });
-
-        toggle.setChecked(true);
 
         Button btnDetect = (Button) findViewById(R.id.btnDetectColor);
 
@@ -152,9 +148,6 @@ public class TargetDetectionActivity extends Activity implements CameraBridgeVie
         lowerThreshold = new Scalar(-40, 110, 170); // lower target hsv values (orange)
         upperThreshold = new Scalar(24, 261, 256); // upper target hsv values (orange)
 
-        //lowerThreshold = new Scalar(0.11 * 256, 0.60 * 256, 0.20 * 256); // yellow tennis color – lower hsv values
-        //upperThreshold = new Scalar(0.14 * 256, 256, 256); // yellow tennis color – upper hsv values
-
         CONTOUR_COLOR = new Scalar(0, 255, 0, 255);
 
         // record the screen size constants
@@ -185,15 +178,15 @@ public class TargetDetectionActivity extends Activity implements CameraBridgeVie
         // original image capture
         rgbaMat = inputFrame.rgba();
 
-        if (findHSV) {
+        if (follow) {
 
-            // if toggle is on, draw rectangle
-            Imgproc.rectangle(rgbaMat, new Point(targetHSVRect.x, targetHSVRect.y),
-                    new Point(targetHSVRect.x + 2 * targetHSVRect.width, targetHSVRect.y - 2 * targetHSVRect.height), CONTOUR_COLOR, 5);
+            followTarget();
 
         } else {
 
-            followTarget();
+            // draw rectangle
+            Imgproc.rectangle(rgbaMat, new Point(targetHSVRect.x, targetHSVRect.y),
+                    new Point(targetHSVRect.x + 2 * targetHSVRect.width, targetHSVRect.y - 2 * targetHSVRect.height), CONTOUR_COLOR, 5);
         }
 
         return rgbaMat;
@@ -317,6 +310,7 @@ public class TargetDetectionActivity extends Activity implements CameraBridgeVie
             // draw center
             Imgproc.circle(rgbaMat, center, 2, CONTOUR_COLOR, 7);
 
+            // send command to robot unit
             rob.drive(150, (360 * (1 - center.x / mCameraViewWidth)));
 
         } else {

@@ -11,18 +11,22 @@
         android:layout_height="fill_parent" />
 
     <ToggleButton
+        android:id="@+id/btnClick"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Click"
-        android:id="@+id/btnClick"
         android:layout_alignParentBottom="true"
-        android:layout_alignParentStart="true" />
+        android:layout_alignParentStart="true"
+        android:text="Click"
+        android:textColor="@android:color/white"
+        android:textStyle="bold" />
 
     <Button
+        android:id="@+id/btnDetectColor"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="DETECT COLOR"
-        android:id="@+id/btnDetectColor"
+        android:layout_alignParentEnd="true"
         android:layout_alignTop="@+id/btnClick"
-        android:layout_alignParentEnd="true" />
+        android:text="DETECT COLOR"
+        android:textColor="@android:color/white"
+        android:textStyle="bold" />
 </RelativeLayout>
