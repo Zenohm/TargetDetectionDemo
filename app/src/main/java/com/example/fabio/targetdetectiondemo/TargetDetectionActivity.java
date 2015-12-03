@@ -2,8 +2,13 @@ package com.example.fabio.targetdetectiondemo;
 
 import android.app.Activity;
 import android.os.Bundle;
+import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
+import android.widget.Button;
+import android.widget.CompoundButton;
+import android.widget.Toast;
+import android.widget.ToggleButton;
 
 import org.opencv.android.BaseLoaderCallback;
 import org.opencv.android.CameraBridgeViewBase;
@@ -15,6 +20,7 @@ import org.opencv.core.Mat;
 import org.opencv.core.MatOfPoint;
 import org.opencv.core.MatOfPoint2f;
 import org.opencv.core.Point;
+import org.opencv.core.Rect;
 import org.opencv.core.Scalar;
 import org.opencv.imgproc.Imgproc;
 
@@ -25,7 +31,7 @@ import java.util.List;
  * Demo for target detection (bright-colored ball) using opencv.
  *
  * @author fiorfe01 - Fabio Fiori
- * @author  - Isaac Smith
+ * @author - Isaac Smith
  */
 public class TargetDetectionActivity extends Activity implements CameraBridgeViewBase.CvCameraViewListener2 {
 
@@ -38,13 +44,20 @@ public class TargetDetectionActivity extends Activity implements CameraBridgeVie
 
     // lower and upper threshold for hsv target color
     private Scalar lowerThreshold, upperThreshold;
+
     private Scalar CONTOUR_COLOR; // contour color
 
-    private Robot rob; // robot unit object
-
     // screen size variables
-    private double mCameraViewWidth;
-    private double mCameraViewHeight;
+    private int mCameraViewWidth;
+    private int mCameraViewHeight;
+
+    private boolean findHSV;
+
+    // target hsv rectangle
+    private Rect targetHSVRect;
+
+    // Robot obj for communication
+    private Robot rob;
 
     private CameraBridgeViewBase mOpenCvCameraView;
 
@@ -75,6 +88,25 @@ public class TargetDetectionActivity extends Activity implements CameraBridgeVie
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
         setContentView(R.layout.color_blob_detection_activity_surface_view);
+
+        ToggleButton toggle = (ToggleButton) findViewById(R.id.btnClick);
+
+        toggle.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+
+                findHSV = isChecked;
+            }
+        });
+
+        Button low = (Button) findViewById(R.id.btnDetectColor);
+
+        low.setOnClickListener(new View.OnClickListener() {
+
+            public void onClick(View v) {
+
+                getHSV();
+            }
+        });
 
         mOpenCvCameraView = (CameraBridgeViewBase) findViewById(R.id.color_blob_detection_activity_surface_view);
 
@@ -123,11 +155,20 @@ public class TargetDetectionActivity extends Activity implements CameraBridgeVie
 
         CONTOUR_COLOR = new Scalar(0, 255, 0, 255);
 
-        rob = new Robot("192.168.1.101");
-
         // record the screen size constants
-        mCameraViewWidth = (double) width;
-        mCameraViewHeight = (double) height;
+        mCameraViewWidth = width;
+        mCameraViewHeight = height;
+
+        // instantiate target hsv rectangle
+        targetHSVRect = new Rect();
+
+        targetHSVRect.width = mCameraViewWidth / 16;
+        targetHSVRect.height = mCameraViewHeight / 16;
+
+        targetHSVRect.x = mCameraViewWidth / 2 - targetHSVRect.width;
+        targetHSVRect.y = mCameraViewHeight / 2 + targetHSVRect.height;
+
+        rob = new Robot("192.168.1.3");
     }
 
     @Override
@@ -141,6 +182,77 @@ public class TargetDetectionActivity extends Activity implements CameraBridgeVie
 
         // original image capture
         rgbaMat = inputFrame.rgba();
+
+        if (findHSV) {
+
+            // if toggle is on, draw rectangle
+            Imgproc.rectangle(rgbaMat, new Point(targetHSVRect.x, targetHSVRect.y),
+                    new Point(targetHSVRect.x + 2 * targetHSVRect.width, targetHSVRect.y - 2 * targetHSVRect.height), CONTOUR_COLOR, 5);
+
+        } else {
+
+            followTarget();
+        }
+
+        return rgbaMat;
+    }
+
+    /**
+     * Gets HSV from target hsv rectangle.
+     */
+    private void getHSV() {
+
+        Mat targetRegionRgba = rgbaMat.submat(targetHSVRect);
+
+        Mat targetRegionHsv = new Mat();
+
+        Imgproc.cvtColor(targetRegionRgba, targetRegionHsv, Imgproc.COLOR_RGB2HSV_FULL);
+
+        // calculate average color of touched region
+        Scalar hsv = Core.sumElems(targetRegionHsv);
+
+        int pointCount = targetHSVRect.width * targetHSVRect.height;
+
+        for (int i = 0; i < hsv.val.length; i++)
+            hsv.val[i] /= pointCount;
+
+        setHsvRange(hsv);
+    }
+
+    /**
+     * Sets the HSV range.
+     *
+     * @param hsvColor
+     */
+    public void setHsvRange(Scalar hsvColor) {
+
+        Scalar mColorRadius = new Scalar(25, 50, 50, 0);
+
+        // ensures that the hue adjusted hue range is between 0 and 255
+        double minH = (hsvColor.val[0] >= mColorRadius.val[0]) ? hsvColor.val[0] - mColorRadius.val[0] : 0;
+        double maxH = (hsvColor.val[0] + mColorRadius.val[0] <= 255) ? hsvColor.val[0] + mColorRadius.val[0] : 255;
+
+        lowerThreshold.val[0] = minH;
+        upperThreshold.val[0] = maxH;
+
+        lowerThreshold.val[1] = hsvColor.val[1] - mColorRadius.val[1];
+        upperThreshold.val[1] = hsvColor.val[1] + mColorRadius.val[1];
+
+        lowerThreshold.val[2] = hsvColor.val[2] - mColorRadius.val[2];
+        upperThreshold.val[2] = hsvColor.val[2] + mColorRadius.val[2];
+
+        lowerThreshold.val[3] = 0;
+        upperThreshold.val[3] = 255;
+
+        // output hsv range
+        Toast.makeText(this, "LOWER HSV = " + lowerThreshold, Toast.LENGTH_LONG).show();
+        Toast.makeText(this, "UPPER HSV = " + upperThreshold, Toast.LENGTH_LONG).show();
+    }
+
+    /**
+     * Follows the target.
+     */
+    private void followTarget() {
 
         // downsize original image (divide length and height by 4) for faster image processing
         Imgproc.pyrDown(rgbaMat, pyrDownMat);
@@ -203,10 +315,11 @@ public class TargetDetectionActivity extends Activity implements CameraBridgeVie
             // draw center
             Imgproc.circle(rgbaMat, center, 2, CONTOUR_COLOR, 7);
 
-            // send command to robot
             rob.drive(150, (360 * (1 - center.x / mCameraViewWidth)));
-        }
 
-        return rgbaMat;
+        } else {
+
+            rob.stop();
+        }
     }
 }

@@ -26,7 +26,7 @@ public class Robot {
     /**
      * Holds the delay that each command will Milliseconds
      */
-    static int DELAY = 300;
+    static int DELAY = 180;
     /**
      * The Roomba will not drive in dangerous situations
      */
