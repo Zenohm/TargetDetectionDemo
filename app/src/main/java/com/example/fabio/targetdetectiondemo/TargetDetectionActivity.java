@@ -98,9 +98,11 @@ public class TargetDetectionActivity extends Activity implements CameraBridgeVie
             }
         });
 
-        Button low = (Button) findViewById(R.id.btnDetectColor);
+        toggle.setChecked(true);
 
-        low.setOnClickListener(new View.OnClickListener() {
+        Button btnDetect = (Button) findViewById(R.id.btnDetectColor);
+
+        btnDetect.setOnClickListener(new View.OnClickListener() {
 
             public void onClick(View v) {
 
